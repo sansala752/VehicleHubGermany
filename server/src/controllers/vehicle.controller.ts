@@ -10,7 +10,7 @@ const STATUS_MAP: Record<string, VehicleStatus> = {
 
 export const createVehicle = async (req: Request, res: Response) => {
   try {
-    const { name, manufacturer, year, price, status, imageUrl, vehicleTypeId } = req.body;
+    const { name, manufacturer, year, price, status, description, imageUrl, vehicleTypeId } = req.body;
 
     const vehicle = await prisma.vehicle.create({
       data: {
@@ -19,6 +19,7 @@ export const createVehicle = async (req: Request, res: Response) => {
         year: Number(year),
         price: Number(price),
         availability: STATUS_MAP[status] ?? VehicleStatus.AVAILABLE,
+        description,
         imageUrl,
         vehicleTypeId,
       },
@@ -58,7 +59,7 @@ export const deleteVehicle = async (req: Request, res: Response) => {
 export const updateVehicle = async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-    const { name, manufacturer, year, price, status, imageUrl, vehicleTypeId } = req.body;
+    const { name, manufacturer, year, price, status, description, imageUrl, vehicleTypeId } = req.body;
 
     const vehicle = await prisma.vehicle.update({
       where: { id },
@@ -68,6 +69,7 @@ export const updateVehicle = async (req: Request, res: Response) => {
         year: Number(year),
         price: Number(price),
         availability: STATUS_MAP[status] ?? VehicleStatus.AVAILABLE,
+        description,
         imageUrl,
         vehicleTypeId,
       },
@@ -95,5 +97,45 @@ export const getVehicleById = async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error fetching vehicle" });
+  }
+};
+
+export const getStats = async (req: Request, res: Response) => {
+  try {
+    const [total, available, sold, reserved, types] = await Promise.all([
+      prisma.vehicle.count(),
+      prisma.vehicle.count({ where: { availability: "AVAILABLE" } }),
+      prisma.vehicle.count({ where: { availability: "SOLD" } }),
+      prisma.vehicle.count({ where: { availability: "RESERVED" } }),
+      prisma.vehicleType.count(),
+    ]);
+
+    const inventoryValue = await prisma.vehicle.aggregate({
+      _sum: { price: true },
+    });
+
+    const recentVehicles = await prisma.vehicle.findMany({
+      take: 4,
+      orderBy: { createdAt: "desc" },
+      include: { vehicleType: true },
+    });
+
+    const typeDistribution = await prisma.vehicleType.findMany({
+      include: { _count: { select: { vehicles: true } } },
+    });
+
+    res.json({
+      total,
+      available,
+      sold,
+      reserved,
+      types,
+      inventoryValue: inventoryValue._sum.price ?? 0,
+      recentVehicles,
+      typeDistribution,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching stats" });
   }
 };

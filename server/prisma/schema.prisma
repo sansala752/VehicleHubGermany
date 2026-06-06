@@ -36,6 +36,7 @@ model Vehicle {
   availability  VehicleStatus
 
   imageUrl      String? 
+  description   String?
 
   vehicleTypeId String
   vehicleType   VehicleType @relation(fields: [vehicleTypeId], references: [id])

@@ -10,6 +10,7 @@ interface Vehicle {
   year: number;
   price: number;
   availability: "AVAILABLE" | "SOLD" | "RESERVED";
+  description?: string;
   imageUrl?: string;
 }
 
@@ -132,6 +133,13 @@ export default function VehicleDetail() {
                 {STATUS_LABEL[vehicle.availability]}
               </span>
             </div>
+            {/* Description */}
+            {vehicle.description && (
+            <div className="px-6 pb-5 border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Description</p>
+                <p className="text-sm text-slate-600 leading-relaxed">{vehicle.description}</p>
+            </div>
+            )}
           </div>
         </div>
 

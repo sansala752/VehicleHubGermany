@@ -11,6 +11,7 @@ interface FormData {
   status: VehicleStatus;
   price: string;
   year: string;
+  description: string;
   imageUrl: string;
 }
 
@@ -45,6 +46,7 @@ export default function AddVehicle() {
     status: "Available",
     price: "",
     year: String(CURRENT_YEAR),
+    description: "",
     imageUrl: "",
   });
 
@@ -93,6 +95,7 @@ export default function AddVehicle() {
         status: form.status,
         price: form.price,
         year: form.year,
+        description: form.description,
         imageUrl: finalImageUrl,
       }),
     });
@@ -241,8 +244,24 @@ export default function AddVehicle() {
             </div>
           </div>
 
+          <div className="px-6 pt-5 pb-6">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">
+              About the Vehicle
+            </p>
+            <label className="block text-sm font-medium text-[#0F1C2E] mb-1.5">
+              Description
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) => set("description", e.target.value)}
+              placeholder="Brief description of the vehicle..."
+              rows={3}
+              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder-slate-300 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition resize-none"
+            />
+          </div>
+
           {/* Image URL */}
-         <div className="px-6 pt-5 pb-6">
+         <div className="px-6 pb-6">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">
             Media
           </p>
