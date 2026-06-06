@@ -1,0 +1,44 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+enum VehicleStatus {
+  AVAILABLE
+  SOLD
+  RESERVED
+  OUT_OF_STOCK
+}
+
+model VehicleType {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  vehicles  Vehicle[]
+  createdAt DateTime  @default(now())
+}
+
+model Vehicle {
+  id            String        @id @default(uuid())
+  name          String
+  manufacturer  String
+  year          Int
+  price         Float
+  availability  VehicleStatus
+
+  imageUrl      String? 
+
+  vehicleTypeId String
+  vehicleType   VehicleType @relation(fields: [vehicleTypeId], references: [id])
+
+  createdAt     DateTime @default(now())
+}
