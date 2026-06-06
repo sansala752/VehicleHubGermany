@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Car, ArrowLeft, Upload, CheckCircle2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Car, CheckCircle2, Upload } from "lucide-react";
 
 type VehicleStatus = "Available" | "Sold" | "Reserved";
 
@@ -14,41 +14,44 @@ interface FormData {
   imageUrl: string;
 }
 
-const VEHICLE_TYPES = [
-  { id: "t-1", name: "Electric Car" },
-  { id: "t-2", name: "Cargo Bike" },
-];
-
 const STATUS_OPTIONS: VehicleStatus[] = ["Available", "Sold", "Reserved"];
-
 const STATUS_STYLES: Record<VehicleStatus, string> = {
   Available: "text-emerald-600 bg-emerald-50 border-emerald-200",
   Sold: "text-slate-500 bg-slate-100 border-slate-200",
   Reserved: "text-amber-600 bg-amber-50 border-amber-200",
 };
-
 const STATUS_DOT: Record<VehicleStatus, string> = {
   Available: "bg-emerald-500",
   Sold: "bg-slate-400",
   Reserved: "bg-amber-500",
 };
+const STATUS_MAP: Record<string, VehicleStatus> = {
+  AVAILABLE: "Available",
+  SOLD: "Sold",
+  RESERVED: "Reserved",
+};
 
+const API = import.meta.env.VITE_API_URL;
 const CURRENT_YEAR = new Date().getFullYear();
 
-export default function AddVehicle() {
+export default function EditVehicle() {
+  const { id } = useParams();
   const navigate = useNavigate();
 
   const [form, setForm] = useState<FormData>({
     name: "",
     manufacturer: "",
-    vehicleTypeId: "t-1",
+    vehicleTypeId: "",
     status: "Available",
     price: "",
     year: String(CURRENT_YEAR),
     imageUrl: "",
   });
 
+  const [vehicleTypes, setVehicleTypes] = useState<{ id: string; name: string }[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [imgError, setImgError] = useState(false);
 
   const set = (key: keyof FormData, value: string) => {
@@ -56,75 +59,84 @@ export default function AddVehicle() {
     if (key === "imageUrl") setImgError(false);
   };
 
-  const selectedType = VEHICLE_TYPES.find((t) => t.id === form.vehicleTypeId);
+  // Fetch both vehicle types and vehicle data in parallel
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API}/api/vehicle-types`).then((r) => r.json()),
+      fetch(`${API}/api/vehicles/${id}`).then((r) => r.json()),
+    ]).then(([types, data]) => {
+      setVehicleTypes(types);
+      setForm({
+        name: data.name,
+        manufacturer: data.manufacturer,
+        vehicleTypeId: data.vehicleTypeId,
+        status: STATUS_MAP[data.availability] ?? "Available",
+        price: String(data.price),
+        year: String(data.year),
+        imageUrl: data.imageUrl ?? "",
+      });
+      setLoading(false);
+    });
+  }, [id]);
+
+  const selectedType = vehicleTypes.find((t) => t.id === form.vehicleTypeId);
   const previewPrice = parseFloat(form.price) || 0;
   const hasPreview = form.name || form.manufacturer;
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
   const handleSave = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
+    try {
+      let finalImageUrl = form.imageUrl;
 
-  try {
-    const API = import.meta.env.VITE_API_URL;
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("image", selectedFile);
+        const uploadRes = await fetch(`${API}/upload`, { method: "POST", body: formData });
+        const uploadData = await uploadRes.json();
+        finalImageUrl = uploadData.imageUrl;
+      }
 
-    // 1. Upload image first if one is selected
-    let finalImageUrl = form.imageUrl;
-    if (selectedFile) {
-      const formData = new FormData();
-      formData.append("image", selectedFile);
-
-      const uploadRes = await fetch(`${API}/upload`, {
-        method: "POST",
-        body: formData,
+      const res = await fetch(`${API}/api/vehicles/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          manufacturer: form.manufacturer,
+          vehicleTypeId: form.vehicleTypeId,
+          status: form.status,
+          price: form.price,
+          year: form.year,
+          imageUrl: finalImageUrl,
+        }),
       });
-      const uploadData = await uploadRes.json();
-      finalImageUrl = uploadData.imageUrl;
+
+      if (!res.ok) throw new Error("Failed to update vehicle");
+
+      setSaved(true);
+      setTimeout(() => navigate(`/vehicles/${id}`), 1500);
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong. Please try again.");
     }
+  };
 
-    // 2. Then save vehicle with real image URL
-    const res = await fetch(`${API}/api/vehicles`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.name,
-        manufacturer: form.manufacturer,
-        vehicleTypeId: form.vehicleTypeId,
-        status: form.status,
-        price: form.price,
-        year: form.year,
-        imageUrl: finalImageUrl,
-      }),
-    });
-
-    if (!res.ok) throw new Error("Failed to save vehicle");
-
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      navigate("/inventory");
-    }, 2500);
-
-  } catch (error) {
-    console.error(error);
-    alert("Something went wrong. Please try again.");
-  }
-};
+  if (loading) return (
+    <div className="bg-[#EEF2F7] min-h-screen p-6 flex items-center justify-center">
+      <p className="text-slate-400 text-sm">Loading vehicle...</p>
+    </div>
+  );
 
   return (
     <div className="bg-[#EEF2F7] min-h-screen p-6 flex-1 overflow-auto">
 
       {/* Header */}
-     <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-[#0F1C2E]">Add Vehicle</h1>
-          <p className="text-slate-400 text-sm">
-            Add a new vehicle to your inventory
-          </p>
+          <h1 className="text-2xl font-bold text-[#0F1C2E]">Edit Vehicle</h1>
+          <p className="text-slate-400 text-sm">Update vehicle information</p>
         </div>
-
         <button
-          onClick={() => navigate("/inventory")}
+          onClick={() => navigate(`/vehicles/${id}`)}
           className="flex items-center gap-2 text-sm text-slate-500 hover:text-[#0F1C2E] bg-white border border-slate-200 px-4 py-2 rounded-xl hover:shadow transition-all"
         >
           <ArrowLeft size={15} />
@@ -149,8 +161,7 @@ export default function AddVehicle() {
                 required
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
-                placeholder="e.g. Tesla Model 3"
-                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder-slate-300 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition"
+                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition"
               />
             </div>
 
@@ -162,8 +173,7 @@ export default function AddVehicle() {
                 required
                 value={form.manufacturer}
                 onChange={(e) => set("manufacturer", e.target.value)}
-                placeholder="e.g. Tesla, Volkswagen, BMW"
-                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder-slate-300 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition"
+                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition"
               />
             </div>
 
@@ -178,7 +188,7 @@ export default function AddVehicle() {
                   onChange={(e) => set("vehicleTypeId", e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 bg-white transition appearance-none cursor-pointer"
                 >
-                  {VEHICLE_TYPES.map((t) => (
+                  {vehicleTypes.map((t) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
@@ -215,11 +225,9 @@ export default function AddVehicle() {
                     required
                     type="number"
                     min={0}
-                    step={0.01}
                     value={form.price}
                     onChange={(e) => set("price", e.target.value)}
-                    placeholder="42990"
-                    className="w-full border border-slate-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-slate-700 placeholder-slate-300 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition"
+                    className="w-full border border-slate-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-slate-700 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition"
                   />
                 </div>
               </div>
@@ -234,57 +242,38 @@ export default function AddVehicle() {
                   max={CURRENT_YEAR + 2}
                   value={form.year}
                   onChange={(e) => set("year", e.target.value)}
-                  placeholder={String(CURRENT_YEAR)}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 placeholder-slate-300 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 outline-none focus:border-[#0F1C2E] focus:ring-2 focus:ring-[#0F1C2E]/10 transition"
                 />
               </div>
             </div>
           </div>
 
-          {/* Image URL */}
-         <div className="px-6 pt-5 pb-6">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">
-            Media
-          </p>
-
-          <label className="block text-sm font-medium text-[#0F1C2E] mb-2">
-            Upload Vehicle Image
-          </label>
-
-          <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setSelectedFile(file);                          // store raw file
-              set("imageUrl", URL.createObjectURL(file));     // local preview only
-            }}
-            className="hidden"
-          />
-
-            <div className="flex flex-col items-center justify-center text-center">
+          {/* Image */}
+          <div className="px-6 pt-5 pb-6">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Media</p>
+            <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setSelectedFile(file);
+                  set("imageUrl", URL.createObjectURL(file));
+                }}
+              />
               <Upload className="w-6 h-6 text-slate-400 mb-2" />
-              <p className="text-sm text-slate-600">
-                Click to upload or drag & drop
-              </p>
-              <p className="text-xs text-slate-400 mt-1">
-                PNG, JPG up to 10MB
-              </p>
-            </div>
-          </label>
-
-          <p className="text-xs text-slate-400 mt-2">
-            Upload a clear image of the vehicle
-          </p>
-        </div>
+              <p className="text-sm text-slate-600">Click to replace image</p>
+              <p className="text-xs text-slate-400 mt-1">PNG, JPG up to 10MB</p>
+            </label>
+          </div>
 
           {/* Footer */}
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={() => navigate("/inventory")}
+              onClick={() => navigate(`/vehicles/${id}`)}
               className="px-5 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors"
             >
               Cancel
@@ -292,19 +281,10 @@ export default function AddVehicle() {
             <button
               type="submit"
               className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-xl shadow-sm transition-all ${
-                saved
-                  ? "bg-emerald-500 text-white"
-                  : "bg-[#E63950] hover:bg-[#cc2e42] text-white"
+                saved ? "bg-emerald-500 text-white" : "bg-[#E63950] hover:bg-[#cc2e42] text-white"
               }`}
             >
-              {saved ? (
-                <>
-                  <CheckCircle2 size={15} />
-                  Saved!
-                </>
-              ) : (
-                "Save Vehicle"
-              )}
+              {saved ? <><CheckCircle2 size={15} /> Saved!</> : "Save Changes"}
             </button>
           </div>
         </div>
@@ -335,7 +315,7 @@ export default function AddVehicle() {
 
           <div className="px-5 py-4">
             <p className="font-bold text-[#0F1C2E] text-base truncate">
-              {hasPreview ? (form.name || "Vehicle name") : "Vehicle name"}
+              {hasPreview ? form.name : "Vehicle name"}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">
               {form.manufacturer && `${form.manufacturer} · `}

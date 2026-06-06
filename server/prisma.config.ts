@@ -8,6 +8,6 @@ export default defineConfig({
   },
   datasource: {
     adapter: "postgresql",
-    url: process.env["DATABASE_URL"],
+    url: process.env["DATABASE_URL"]!,
   },
 });
